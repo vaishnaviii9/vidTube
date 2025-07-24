@@ -1,53 +1,67 @@
-import mongoose, {isValidObjectId} from "mongoose"
-import {Playlist} from "../models/playlist.model.js"
-import {ApiError} from "../utils/ApiError.js"
-import {ApiResponse} from "../utils/ApiResponse.js"
-import {asyncHandler} from "../utils/asyncHandler.js"
+import mongoose, { isValidObjectId } from "mongoose";
+import { User } from "../models/user.model.js";
+import { Subscription } from "../models/subscription.model.js";
+import { ApiError } from "../utils/ApiError.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
+const toggleSubscription = asyncHandler(async (req, res) => {
+    const { channelId } = req.params;
 
-const createPlaylist = asyncHandler(async (req, res) => {
-    const {name, description} = req.body
+    if (!isValidObjectId(channelId)) {
+        throw new ApiError(400, "Invalid Channel ID");
+    }
 
-    //TODO: create playlist
-})
+    const subscriberId = req.user._id;
 
-const getUserPlaylists = asyncHandler(async (req, res) => {
-    const {userId} = req.params
-    //TODO: get user playlists
-})
+    // Check if the subscription already exists
+    const existingSubscription = await Subscription.findOne({
+        subscriber: subscriberId,
+        channel: channelId
+    });
 
-const getPlaylistById = asyncHandler(async (req, res) => {
-    const {playlistId} = req.params
-    //TODO: get playlist by id
-})
+    if (existingSubscription) {
+        // If subscription exists, delete it (unsubscribe)
+        await Subscription.findByIdAndDelete(existingSubscription._id);
+        return res.status(200).json(new ApiResponse(200, {}, "Unsubscribed successfully"));
+    } else {
+        // If subscription does not exist, create it (subscribe)
+        const subscription = await Subscription.create({
+            subscriber: subscriberId,
+            channel: channelId
+        });
+        return res.status(201).json(new ApiResponse(201, subscription, "Subscribed successfully"));
+    }
+});
 
-const addVideoToPlaylist = asyncHandler(async (req, res) => {
-    const {playlistId, videoId} = req.params
-})
+// Controller to return subscriber list of a channel
+const getUserChannelSubscribers = asyncHandler(async (req, res) => {
+    const { channelId } = req.params;
 
-const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
-    const {playlistId, videoId} = req.params
-    // TODO: remove video from playlist
+    if (!isValidObjectId(channelId)) {
+        throw new ApiError(400, "Invalid Channel ID");
+    }
 
-})
+    const subscribers = await Subscription.find({ channel: channelId }).populate("subscriber");
 
-const deletePlaylist = asyncHandler(async (req, res) => {
-    const {playlistId} = req.params
-    // TODO: delete playlist
-})
+    return res.status(200).json(new ApiResponse(200, subscribers, "Subscribers fetched successfully"));
+});
 
-const updatePlaylist = asyncHandler(async (req, res) => {
-    const {playlistId} = req.params
-    const {name, description} = req.body
-    //TODO: update playlist
-})
+// Controller to return channel list to which user has subscribed
+const getSubscribedChannels = asyncHandler(async (req, res) => {
+    const { subscriberId } = req.params;
+
+    if (!isValidObjectId(subscriberId)) {
+        throw new ApiError(400, "Invalid Subscriber ID");
+    }
+
+    const channels = await Subscription.find({ subscriber: subscriberId }).populate("channel");
+
+    return res.status(200).json(new ApiResponse(200, channels, "Subscribed channels fetched successfully"));
+});
 
 export {
-    createPlaylist,
-    getUserPlaylists,
-    getPlaylistById,
-    addVideoToPlaylist,
-    removeVideoFromPlaylist,
-    deletePlaylist,
-    updatePlaylist
-}
+    toggleSubscription,
+    getUserChannelSubscribers,
+    getSubscribedChannels
+};
